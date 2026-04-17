@@ -32,7 +32,9 @@ graph TD
     Frontend -->|Real-time Snapshot| DB[(Firebase Firestore)]
     Frontend -->|API Interaction| Server[Express.js Node Server]
     Server -->|Admin SDK| DB
-    Server -->|Auth Logic| Auth[Firebase Auth Service]
+    Server -->|Automation Engine| Auto[Agentic Service]
+    Auto -->|Evaluate Rules| DB
+    Auto -->|Push Alert| Notify[Real-time Notifications]
     Server -->|AI Logic| AI[Keyword Semantic Engine]
 ```
 
@@ -41,8 +43,9 @@ graph TD
 | Layer | Responsibility | Technologies |
 | :--- | :--- | :--- |
 | **Real-Time Data** | Live Cart/Trending updates | Firestore SDK (`onSnapshot`) |
+| **Agentic Service** | Rule-based Automation Engine | Node.js, Firestore Queries |
 | **Identity** | User Auth, RBAC, Profile Storage | Firebase Auth + Firestore User Docs |
-| **Intelligence** | Product Recommendations | Custom AI Controller / Semantic Search |
+| **Intelligence** | Product Recommendations & AI Parsing | Custom AI Controller / LLM logic |
 | **Storefront** | UI/UX, Navigation, Interactions | HTML5, CSS3, JS Modules |
 | **Operations** | Admin Controls, Order Management | Node.js, Express.js (Admin SDK) |
 
@@ -60,11 +63,21 @@ graph TD
 Describe your project or tech stack, and the AI Assistant will optimize your shopping experience by recommending relevant gear, hoodies, or digital assets.
 
 ### ⚙️ Agentic Automation System
-Set up intelligent monitoring protocols to stay ahead of the marketplace:
-*   **Trigger**: New products, price drops, or restock events.
-*   **Condition**: Filter by category, max price, or specific product IDs.
-*   **Action**: Receive real-time in-app notifications with deep links to products.
-*   **AI Generator**: Use natural language to quickly spin up new automation rules.
+ForgeCart features a sophisticated **Trigger-Condition-Action** pipeline that allows users to deploy personal "agents" to monitor the marketplace:
+
+#### 🔹 Supported Triggers
+*   **`new_product`**: Fires when items matching your tech stack or category are added.
+*   **`price_drop`**: Monitors specific items or categories for any decrease in price.
+*   **`restock`**: Alerts you the moment a sought-after item goes from "Out of Stock" to available.
+
+#### 🔹 Condition Evaluation
+Our automation engine supports complex logical filters:
+- **Category-based**: Monitor only "Clothing", "Digital Assets", etc.
+- **Threshold-based**: "Alert me only if price is under $50".
+- **Product-specific**: Track a single unique asset.
+
+#### 🔹 AI-Powered Generation
+Don't want to fill out forms? Use the **Forge AI Assistant** within the Automations tab. Simply type: *"Notify me when React hoodies are under $100"* and the system will automatically parse the intent and register the rule.
 
 ### 🌓 Advanced UI & Theme Engine
 *   **Persistent Theme**: Automatically remembers your Light or Dark mode preference.
@@ -100,14 +113,18 @@ Secure access for administrators to:
 │   ├── db-service.js      # Real-time Firestore listeners
 │   ├── ui-handler.js      # Theme & dynamic UI management
 │   ├── storefront.js      # Storefront rendering & logic
-│   └── admin.js           # Admin Dashboard frontend
+│   ├── admin.js           # Admin Dashboard frontend
+│   ├── automation.js      # Automation rule management
+│   └── notifications.js   # Real-time alert listeners
 ├── src/
 │   ├── app.js             # API & Server entry
-│   ├── controllers/       # AI, Cart, Order, and Product logic
-│   ├── routes/            # Backend API definitions (Admin, AI, Auth)
+│   ├── controllers/       # AI, Cart, Order, Product, and Automation logic
+│   ├── routes/            # Backend API definitions (Admin, AI, Auth, Automation)
+│   ├── services/          # core Logic (Automation Engine)
 │   └── data/              # DB Seeding & Store definitions
 ├── css/                   # Dynamic Theme styling
 ├── admin.html             # Administrative Mission Control
+├── automation.html        # Agentic Automation Dashboard
 ├── index.html             # Marketplace Home
 └── product.html           # Deep Asset Details
 ```
