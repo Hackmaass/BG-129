@@ -1,0 +1,72 @@
+FORGECART - BACKEND PREPARATION GUIDE
+======================================
+
+1. PROJECT OVERVIEW
+-------------------
+ForgeCart is a premium developer gear store transitioning from a frontend prototype to a full-stack Express.js application.
+
+Current Stack:
+- Frontend: HTML5, CSS3, Vanilla JS (Modules)
+- Backend: Node.js (Express v5.x)
+- Authentication: Firebase Authentication (Client-side implementation)
+- Database: PostgreSQL (Configured via pg pool)
+
+2. CORE BACKEND ARCHITECTURE
+----------------------------
+The backend follows a Controller-Route-Service pattern:
+- src/app.js: Entry point, middleware configuration, static file serving.
+- src/routes/: Defines the API end-points (e.g., /api/products, /api/auth).
+- src/controllers/: Handles the business logic and database interactions.
+- src/middlewares/: Custom error handlers and potentially auth-token verification.
+
+3. DATABASE SCHEMA (Planned/Current)
+------------------------------------
+Table 'users':
+- id (UUID, Primary Key)
+- firebase_uid (String, Unique) - Links to Firebase Auth
+- email (String, Unique)
+- display_name (String)
+- created_at (Timestamp)
+
+Table 'products':
+- id (Serial/UUID, Primary Key)
+- title (String)
+- category (String) - clothing, digital, accessories
+- price (Decimal)
+- image_url (String)
+- description (Text)
+
+Table 'cart_items':
+- id (Primary Key)
+- user_id (Foreign Key)
+- product_id (Foreign Key)
+- quantity (Integer)
+
+4. AUTHENTICATION STRATEGY
+--------------------------
+Currently, we use Firebase Web SDK on the frontend for Identity Management.
+Backend Integration Plan:
+- Frontend sends the Firebase ID Token (JWT) in the 'Authorization' header.
+- Backend uses 'firebase-admin' SDK to verify the token.
+- This ensures that only authenticated users can access protected routes (/api/orders, /api/cart).
+
+5. POTENTIAL BACKEND QUESTIONS & ANSWERS
+----------------------------------------
+
+Q: Why choose Firebase for Authentication?
+A: Firebase provides a robust, production-ready identity service with minimal setup. It handles secure password storage, OAuth providers, and session management, allowing us to focus on the core e-commerce logic.
+
+Q: How do you handle database connections?
+A: We use the 'pg' (node-postgres) pool to manage multiple connections efficiently, ensuring high performance even under load.
+
+Q: What is the current state of API integration?
+A: The frontend is now fully integrated with Firebase for Auth. The backend is configured to serve the frontend and is ready for the implementation of the PostgreSQL-backed product and order APIs.
+
+Q: How is security managed on the server?
+A: We use 'cors' for cross-origin management, 'express.json()' for secure payload parsing, and we have a centralized Error Handler to avoid leaking internal system details.
+
+6. NEXT STEPS (ROADMAP)
+-----------------------
+1. Implement Firebase-Admin on the backend to verify ID tokens.
+2. Build the Product API to replace static placeholder data.
+3. Implement persistent Cart and Order history in PostgreSQL.

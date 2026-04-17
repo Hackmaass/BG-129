@@ -20,6 +20,23 @@ This project serves as a premium foundation for building a developer-centric mar
 
 ## 🏗️ System Architecture
 
+ForgeCart utilizes a specialized
+
+### 🔹 Backend Data Flow
+
+The backend handles requests through a structured pipeline:
+
+```mermaid
+graph LR
+    Req[Request] --> MW[Middlewares: CORS, JSON, Static]
+    MW --> Routes[Routes: /api/products, /api/auth...]
+    Routes --> Ctrl[Controllers: Business Logic]
+    Ctrl --> Model[Data Access: pg-pool/Queries]
+    Model --> DB[(PostgreSQL)]
+```
+
+### 🔹 Architecture Layers
+
 ForgeCart utilizes a specialized architecture designed for performance and scalability:
 
 ```mermaid
