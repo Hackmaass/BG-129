@@ -1,11 +1,12 @@
-const { getCartByUserId, products } = require('../data/store');
+const { db, admin } = require('../config/firebaseAdmin');
 
 const DEFAULT_USER_ID = 'guest';
 
+// For testing purposes before auth middleware is added, we resolve from header.
 const resolveUserId = (req) => req.headers['x-user-id'] || DEFAULT_USER_ID;
 
-const buildCartResponse = (cart) => {
-    const items = cart.map((item) => ({
+const buildCartResponse = (cartItems = []) => {
+    const items = cartItems.map((item) => ({
         ...item,
         lineTotal: Number((item.price * item.quantity).toFixed(2)),
     }));
@@ -19,14 +20,18 @@ const buildCartResponse = (cart) => {
     };
 };
 
+const getCartRef = (userId) => db.collection('carts').doc(userId);
+
 exports.getCart = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
-        const cart = getCartByUserId(userId);
+        const doc = await getCartRef(userId).get();
+        
+        const items = doc.exists ? doc.data().items || [] : [];
 
         res.status(200).json({
             status: 'success',
-            data: buildCartResponse(cart),
+            data: buildCartResponse(items),
         });
     } catch (error) {
         next(error);
@@ -38,7 +43,7 @@ exports.addToCart = async (req, res, next) => {
         const userId = resolveUserId(req);
         const { productId, quantity = 1 } = req.body;
 
-        const requestedProductId = Number(productId);
+        const requestedProductId = String(productId);
         const requestedQuantity = Number(quantity);
 
         if (!requestedProductId || !requestedQuantity || requestedQuantity < 1) {
@@ -48,17 +53,26 @@ exports.addToCart = async (req, res, next) => {
             });
         }
 
-        const product = products.find((item) => item.id === requestedProductId);
-        if (!product) {
+        // Fetch product to verify and get price
+        const productRef = db.collection('products').doc(requestedProductId);
+        const productDoc = await productRef.get();
+
+        if (!productDoc.exists) {
             return res.status(404).json({
                 status: 'error',
                 message: `Product with id ${requestedProductId} not found.`,
             });
         }
 
-        const cart = getCartByUserId(userId);
-        const existingItem = cart.find((item) => item.productId === requestedProductId);
-        const existingQuantity = existingItem ? existingItem.quantity : 0;
+        const product = productDoc.data();
+
+        // Get current cart
+        const cartRef = getCartRef(userId);
+        const cartDoc = await cartRef.get();
+        let items = cartDoc.exists ? cartDoc.data().items || [] : [];
+
+        const existingItemIndex = items.findIndex((item) => item.productId === requestedProductId);
+        const existingQuantity = existingItemIndex !== -1 ? items[existingItemIndex].quantity : 0;
 
         if (existingQuantity + requestedQuantity > product.inventory) {
             return res.status(400).json({
@@ -67,21 +81,23 @@ exports.addToCart = async (req, res, next) => {
             });
         }
 
-        if (existingItem) {
-            existingItem.quantity += requestedQuantity;
+        if (existingItemIndex !== -1) {
+            items[existingItemIndex].quantity += requestedQuantity;
         } else {
-            cart.push({
-                productId: product.id,
+            items.push({
+                productId: requestedProductId,
                 name: product.name,
                 price: product.price,
                 quantity: requestedQuantity,
             });
         }
 
+        await cartRef.set({ items }, { merge: true });
+
         return res.status(201).json({
             status: 'success',
             message: 'Item added to cart.',
-            data: buildCartResponse(cart),
+            data: buildCartResponse(items),
         });
     } catch (error) {
         next(error);
@@ -91,24 +107,35 @@ exports.addToCart = async (req, res, next) => {
 exports.removeFromCart = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
-        const productId = Number(req.params.productId);
-        const cart = getCartByUserId(userId);
+        const productId = String(req.params.productId);
+        
+        const cartRef = getCartRef(userId);
+        const cartDoc = await cartRef.get();
+        
+        if (!cartDoc.exists) {
+             return res.status(404).json({
+                status: 'error',
+                message: `Cart is empty.`,
+            });
+        }
 
-        const itemIndex = cart.findIndex((item) => item.productId === productId);
+        let items = cartDoc.data().items || [];
+        const itemIndex = items.findIndex((item) => item.productId === productId);
 
         if (itemIndex === -1) {
             return res.status(404).json({
                 status: 'error',
-                message: `Product ${req.params.productId} is not in cart.`,
+                message: `Product ${productId} is not in cart.`,
             });
         }
 
-        cart.splice(itemIndex, 1);
+        items.splice(itemIndex, 1);
+        await cartRef.set({ items }, { merge: true });
 
         return res.status(200).json({
             status: 'success',
-            message: `Product ${req.params.productId} removed from cart.`,
-            data: buildCartResponse(cart),
+            message: `Product ${productId} removed from cart.`,
+            data: buildCartResponse(items),
         });
     } catch (error) {
         next(error);
@@ -118,9 +145,8 @@ exports.removeFromCart = async (req, res, next) => {
 exports.updateCartItem = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
-        const productId = Number(req.params.productId);
+        const productId = String(req.params.productId);
         const quantity = Number(req.body.quantity);
-        const cart = getCartByUserId(userId);
 
         if (!quantity || quantity < 1) {
             return res.status(400).json({
@@ -129,21 +155,37 @@ exports.updateCartItem = async (req, res, next) => {
             });
         }
 
-        const cartItem = cart.find((item) => item.productId === productId);
-        if (!cartItem) {
-            return res.status(404).json({
+        const cartRef = getCartRef(userId);
+        const cartDoc = await cartRef.get();
+        
+        if (!cartDoc.exists) {
+             return res.status(404).json({
                 status: 'error',
-                message: `Product ${req.params.productId} is not in cart.`,
+                message: `Cart is empty.`,
             });
         }
 
-        const product = products.find((item) => item.id === productId);
-        if (!product) {
+        let items = cartDoc.data().items || [];
+        const itemIndex = items.findIndex((item) => item.productId === productId);
+
+        if (itemIndex === -1) {
             return res.status(404).json({
                 status: 'error',
-                message: `Product with id ${req.params.productId} not found.`,
+                message: `Product ${productId} is not in cart.`,
             });
         }
+        
+        const productRef = db.collection('products').doc(productId);
+        const productDoc = await productRef.get();
+        
+        if (!productDoc.exists) {
+             return res.status(404).json({
+                status: 'error',
+                message: `Product with id ${productId} not found.`,
+            });
+        }
+        
+        const product = productDoc.data();
 
         if (quantity > product.inventory) {
             return res.status(400).json({
@@ -152,12 +194,13 @@ exports.updateCartItem = async (req, res, next) => {
             });
         }
 
-        cartItem.quantity = quantity;
+        items[itemIndex].quantity = quantity;
+        await cartRef.set({ items }, { merge: true });
 
         return res.status(200).json({
             status: 'success',
             message: 'Cart quantity updated.',
-            data: buildCartResponse(cart),
+            data: buildCartResponse(items),
         });
     } catch (error) {
         next(error);

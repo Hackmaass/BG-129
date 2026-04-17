@@ -1,3 +1,5 @@
+import { auth } from './auth-logic.js';
+
 const API_BASE_URL = 'http://localhost:5000/api';
 const USER_ID_KEY = 'forgecart_user_id';
 const SELECTED_PRODUCT_KEY = 'forgecart_selected_product_id';
@@ -12,13 +14,24 @@ const ensureUserId = () => {
 };
 
 const request = async (path, options = {}) => {
+    const headers = {
+        'Content-Type': 'application/json',
+        'x-user-id': ensureUserId(),
+        ...(options.headers || {}),
+    };
+
+    if (auth && auth.currentUser) {
+        try {
+            const token = await auth.currentUser.getIdToken(true);
+            headers['Authorization'] = `Bearer ${token}`;
+        } catch (error) {
+            console.error("Failed to get auth token", error);
+        }
+    }
+
     const response = await fetch(`${API_BASE_URL}${path}`, {
-        headers: {
-            'Content-Type': 'application/json',
-            'x-user-id': ensureUserId(),
-            ...(options.headers || {}),
-        },
         ...options,
+        headers,
     });
 
     const data = await response.json();

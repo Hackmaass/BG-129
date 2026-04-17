@@ -28,11 +28,11 @@ The backend handles requests through a structured pipeline:
 
 ```mermaid
 graph LR
-    Req[Request] --> MW[Middlewares: CORS, JSON, Static]
+    Req[Request] --> MW[Middlewares: Auth, CORS, JSON]
     MW --> Routes[Routes: /api/products, /api/auth...]
     Routes --> Ctrl[Controllers: Business Logic]
-    Ctrl --> Model[Data Access: pg-pool/Queries]
-    Model --> DB[(PostgreSQL)]
+    Ctrl --> Model[Data Access: firebase-admin]
+    Model --> DB[(Firebase Firestore)]
 ```
 
 ### 🔹 Architecture Layers
@@ -42,10 +42,9 @@ ForgeCart utilizes a specialized architecture designed for performance and scala
 ```mermaid
 graph TD
     User((User)) -->|HTTPS| Frontend[Frontend - HTML5/CSS3]
-    Frontend -->|Auth API| Firebase[Firebase Auth Service]
-    Frontend -->|Static Assets| Server[Express.js Node Server]
-    Server -->|API Routes| Controllers[Business Logic Controllers]
-    Controllers -->|Queries| DB[(PostgreSQL Database)]
+    Frontend -->|Auth Token| Firebase[Firebase Auth Service]
+    Frontend -->|API Requests| Server[Express.js Node Server]
+    Server -->|Admin SDK| DB[(Firebase Firestore)]
 ```
 
 ### 🔹 Implementation Layers
@@ -55,7 +54,7 @@ graph TD
 | **Identity** | User Auth, Session, Profile | Firebase Auth | ✅ Implemented |
 | **Frontend** | UI/UX, Navigation, Interactions | HTML5, CSS3, JS Modules | ✅ Implemented |
 | **Logic** | API Routes, Middleware, Auth Handling | Node.js, Express.js | ✅ Implemented |
-| **Storage** | Product Data, Orders, Cart Persistence | PostgreSQL, pg-node | ✅ Implemented |
+| **Storage** | Product Data, Orders, Cart Persistence | Firebase Firestore | ✅ Implemented |
 
 ---
 

@@ -1,10 +1,9 @@
-const { products } = require('../data/store');
+const { db } = require('../config/firebaseAdmin');
 
 const parseNumber = (value) => {
     if (value === undefined) {
         return undefined;
     }
-
     const converted = Number(value);
     return Number.isNaN(converted) ? undefined : converted;
 };
@@ -22,10 +21,18 @@ exports.getAllProducts = async (req, res, next) => {
             sortOrder = 'asc',
         } = req.query;
 
+        // Fetch all products from Firestore
+        const productsSnapshot = await db.collection('products').get();
+        let products = [];
+        productsSnapshot.forEach(doc => {
+            products.push({ id: doc.id, ...doc.data() });
+        });
+
         const min = parseNumber(minPrice);
         const max = parseNumber(maxPrice);
         const loweredQuery = q ? q.toLowerCase() : '';
 
+        // Client-side filtering (Firestore compound queries can be complex, doing it in memory for now)
         let filtered = products.filter((product) => {
             const matchesQuery = !loweredQuery
                 || product.name.toLowerCase().includes(loweredQuery)
@@ -49,7 +56,6 @@ exports.getAllProducts = async (req, res, next) => {
             if (typeof a[resolvedSortBy] === 'string') {
                 return a[resolvedSortBy].localeCompare(b[resolvedSortBy]) * direction;
             }
-
             return (a[resolvedSortBy] - b[resolvedSortBy]) * direction;
         });
 
@@ -65,19 +71,20 @@ exports.getAllProducts = async (req, res, next) => {
 
 exports.getProductById = async (req, res, next) => {
     try {
-        const id = Number(req.params.id);
-        const product = products.find((item) => item.id === id);
+        const id = String(req.params.id);
+        const docRef = db.collection('products').doc(id);
+        const doc = await docRef.get();
 
-        if (!product) {
+        if (!doc.exists) {
             return res.status(404).json({
                 status: 'error',
-                message: `Product with id ${req.params.id} not found.`,
+                message: `Product with id ${id} not found.`,
             });
         }
 
         return res.status(200).json({
             status: 'success',
-            data: product,
+            data: { id: doc.id, ...doc.data() },
         });
     } catch (error) {
         next(error);
@@ -86,7 +93,11 @@ exports.getProductById = async (req, res, next) => {
 
 exports.getCategories = async (req, res, next) => {
     try {
-        const categories = [...new Set(products.map((product) => product.category))].sort();
+        const productsSnapshot = await db.collection('products').get();
+        const products = [];
+        productsSnapshot.forEach(doc => products.push(doc.data()));
+        
+        const categories = [...new Set(products.map((product) => product.category))].filter(Boolean).sort();
 
         res.status(200).json({
             status: 'success',
@@ -100,12 +111,18 @@ exports.getCategories = async (req, res, next) => {
 
 exports.getInventory = async (req, res, next) => {
     try {
-        const inventory = products.map((product) => ({
-            id: product.id,
-            name: product.name,
-            inventory: product.inventory,
-            inStock: product.inventory > 0,
-        }));
+        const productsSnapshot = await db.collection('products').get();
+        const inventory = [];
+        
+        productsSnapshot.forEach(doc => {
+            const product = doc.data();
+            inventory.push({
+                id: doc.id,
+                name: product.name,
+                inventory: product.inventory,
+                inStock: product.inventory > 0,
+            });
+        });
 
         res.status(200).json({
             status: 'success',

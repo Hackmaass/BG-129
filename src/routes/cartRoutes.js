@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const cartController = require('../controllers/cartController');
+const { verifyToken } = require('../middlewares/authMiddleware');
 
-// All cart routes should be protected by auth middleware eventually
+router.use(verifyToken);
+
 router.get('/', cartController.getCart);
 router.post('/add', cartController.addToCart);
 router.patch('/item/:productId', cartController.updateCartItem);

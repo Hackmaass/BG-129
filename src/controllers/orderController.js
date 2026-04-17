@@ -1,9 +1,4 @@
-const {
-    getCartByUserId,
-    products,
-    orders,
-    generateOrderId,
-} = require('../data/store');
+const { db } = require('../config/firebaseAdmin');
 
 const DEFAULT_USER_ID = 'guest';
 const SHIPPING_FEE = 9.99;
@@ -42,7 +37,10 @@ exports.checkout = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
         const { shippingAddress, paymentMethod = 'card' } = req.body;
-        const cart = getCartByUserId(userId);
+        
+        const cartRef = db.collection('carts').doc(userId);
+        const cartDoc = await cartRef.get();
+        const cartItems = cartDoc.exists ? cartDoc.data().items || [] : [];
 
         if (!shippingAddress) {
             return res.status(400).json({
@@ -51,22 +49,25 @@ exports.checkout = async (req, res, next) => {
             });
         }
 
-        if (cart.length === 0) {
+        if (cartItems.length === 0) {
             return res.status(400).json({
                 status: 'error',
                 message: 'Cart is empty.',
             });
         }
 
-        for (const cartItem of cart) {
-            const product = products.find((item) => item.id === cartItem.productId);
+        // Verify inventory
+        for (const cartItem of cartItems) {
+            const productDoc = await db.collection('products').doc(cartItem.productId).get();
 
-            if (!product) {
+            if (!productDoc.exists) {
                 return res.status(404).json({
                     status: 'error',
                     message: `Product ${cartItem.productId} no longer exists.`,
                 });
             }
+            
+            const product = productDoc.data();
 
             if (cartItem.quantity > product.inventory) {
                 return res.status(400).json({
@@ -76,7 +77,7 @@ exports.checkout = async (req, res, next) => {
             }
         }
 
-        const subtotal = calculateSubtotal(cart);
+        const subtotal = calculateSubtotal(cartItems);
         const total = Number((subtotal + SHIPPING_FEE).toFixed(2));
         const paymentResult = fakePaymentGatewayCharge({ paymentMethod, amount: total });
 
@@ -87,16 +88,24 @@ exports.checkout = async (req, res, next) => {
             });
         }
 
-        for (const cartItem of cart) {
-            const product = products.find((item) => item.id === cartItem.productId);
-            product.inventory -= cartItem.quantity;
+        // Deduct inventory
+        const batch = db.batch();
+        for (const cartItem of cartItems) {
+            const productRef = db.collection('products').doc(cartItem.productId);
+            // Read again or just use field value decrement
+            const doc = await productRef.get();
+            const product = doc.data();
+            batch.update(productRef, { inventory: product.inventory - cartItem.quantity });
         }
 
+        const newOrderRef = db.collection('orders').doc();
+        const orderId = newOrderRef.id;
+
         const order = {
-            orderId: generateOrderId(),
+            orderId,
             userId,
             status: 'placed',
-            items: cart.map((item) => ({ ...item })),
+            items: cartItems.map((item) => ({ ...item })),
             shippingAddress,
             paymentMethod,
             paymentTransactionId: paymentResult.transactionId,
@@ -106,8 +115,12 @@ exports.checkout = async (req, res, next) => {
             createdAt: new Date().toISOString(),
         };
 
-        orders.push(order);
-        cart.length = 0;
+        batch.set(newOrderRef, order);
+        
+        // Clear cart
+        batch.set(cartRef, { items: [] });
+        
+        await batch.commit();
 
         return res.status(201).json({
             status: 'success',
@@ -122,9 +135,12 @@ exports.checkout = async (req, res, next) => {
 exports.getOrderHistory = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
-        const userOrders = orders
-            .filter((order) => order.userId === userId)
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const snapshot = await db.collection('orders').where('userId', '==', userId).get();
+        
+        let userOrders = [];
+        snapshot.forEach(doc => userOrders.push(doc.data()));
+
+        userOrders = userOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
         res.status(200).json({
             status: 'success',

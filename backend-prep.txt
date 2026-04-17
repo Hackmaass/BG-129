@@ -3,70 +3,77 @@ FORGECART - BACKEND PREPARATION GUIDE
 
 1. PROJECT OVERVIEW
 -------------------
-ForgeCart is a premium developer gear store transitioning from a frontend prototype to a full-stack Express.js application.
+ForgeCart is a premium developer gear store transitioning from a frontend prototype to a full-stack Express.js application backed by the Firebase ecosystem.
 
 Current Stack:
 - Frontend: HTML5, CSS3, Vanilla JS (Modules)
 - Backend: Node.js (Express v5.x)
-- Authentication: Firebase Authentication (Client-side implementation)
-- Database: PostgreSQL (Configured via pg pool)
+- Authentication: Firebase Authentication (Client-side implementation & Admin SDK Verification)
+- Database: Firebase Firestore (NoSQL, managed via firebase-admin)
 
 2. CORE BACKEND ARCHITECTURE
 ----------------------------
 The backend follows a Controller-Route-Service pattern:
 - src/app.js: Entry point, middleware configuration, static file serving.
 - src/routes/: Defines the API end-points (e.g., /api/products, /api/auth).
-- src/controllers/: Handles the business logic and database interactions.
-- src/middlewares/: Custom error handlers and potentially auth-token verification.
+- src/controllers/: Handles the business logic and database interactions using `firebase-admin`.
+- src/middlewares/: Custom error handlers and Firebase ID Token verification (`authMiddleware.js`).
 
-3. DATABASE SCHEMA (Planned/Current)
-------------------------------------
-Table 'users':
-- id (UUID, Primary Key)
-- firebase_uid (String, Unique) - Links to Firebase Auth
-- email (String, Unique)
-- display_name (String)
-- created_at (Timestamp)
+3. DATABASE SCHEMA (Firestore Collections)
+------------------------------------------
+Collection 'products':
+- Document ID: string (e.g., "1", "2")
+- Fields:
+  - id (String)
+  - name (String)
+  - category (String) - clothing, digital, accessories
+  - price (Decimal)
+  - image (String)
+  - description (Text)
+  - inventory (Integer)
 
-Table 'products':
-- id (Serial/UUID, Primary Key)
-- title (String)
-- category (String) - clothing, digital, accessories
-- price (Decimal)
-- image_url (String)
-- description (Text)
+Collection 'carts':
+- Document ID: string (match user's Firebase UID)
+- Fields:
+  - items (Array of Objects):
+    - productId (String)
+    - name (String)
+    - price (Decimal)
+    - quantity (Integer)
 
-Table 'cart_items':
-- id (Primary Key)
-- user_id (Foreign Key)
-- product_id (Foreign Key)
-- quantity (Integer)
+Collection 'orders':
+- Document ID: auto-generated string
+- Fields:
+  - orderId (String)
+  - userId (String - Firebase UID)
+  - status (String - e.g., 'placed')
+  - shippingAddress (String)
+  - subtotal, total (Decimal)
+  - items (Array)
+  - createdAt (ISO String)
 
 4. AUTHENTICATION STRATEGY
 --------------------------
-Currently, we use Firebase Web SDK on the frontend for Identity Management.
-Backend Integration Plan:
-- Frontend sends the Firebase ID Token (JWT) in the 'Authorization' header.
-- Backend uses 'firebase-admin' SDK to verify the token.
-- This ensures that only authenticated users can access protected routes (/api/orders, /api/cart).
+We use the Firebase Web SDK on the frontend for Identity Management.
+Backend Integration:
+- Frontend extracts the Firebase ID Token (JWT) via `auth.currentUser.getIdToken()`.
+- Token is sent in the 'Authorization: Bearer <token>' header on API calls.
+- Backend uses `verifyToken` middleware (`firebase-admin`) to ensure only authenticated users can access `/api/orders` and `/api/cart`.
 
 5. POTENTIAL BACKEND QUESTIONS & ANSWERS
 ----------------------------------------
 
-Q: Why choose Firebase for Authentication?
-A: Firebase provides a robust, production-ready identity service with minimal setup. It handles secure password storage, OAuth providers, and session management, allowing us to focus on the core e-commerce logic.
+Q: Why choose Firebase ecosystem (Auth + Firestore)?
+A: Firebase provides a robust, production-ready environment. Using Firestore alongside Firebase Auth means seamless identity resolution and real-time capable NoSQL storage without managing separate infrastructure.
 
 Q: How do you handle database connections?
-A: We use the 'pg' (node-postgres) pool to manage multiple connections efficiently, ensuring high performance even under load.
-
-Q: What is the current state of API integration?
-A: The frontend is now fully integrated with Firebase for Auth. The backend is configured to serve the frontend and is ready for the implementation of the PostgreSQL-backed product and order APIs.
+A: We initialize the Firebase Admin SDK once in `src/config/firebaseAdmin.js` and export the `db` (Firestore) reference for our controllers to use asynchronously.
 
 Q: How is security managed on the server?
-A: We use 'cors' for cross-origin management, 'express.json()' for secure payload parsing, and we have a centralized Error Handler to avoid leaking internal system details.
+A: Our protected routes (`cart`, `orders`) use the `authMiddleware.js` which verifies the incoming JWT token against Firebase using the Admin SDK. This ensures actions are strictly bounded to the authenticated user.
 
 6. NEXT STEPS (ROADMAP)
 -----------------------
-1. Implement Firebase-Admin on the backend to verify ID tokens.
-2. Build the Product API to replace static placeholder data.
-3. Implement persistent Cart and Order history in PostgreSQL.
+1. Secure a proper `serviceAccountKey.json` to enable cloud persistence.
+2. Build an Admin dashboard to manage products.
+3. Integrate real payment gateways like Stripe instead of the current mock.
