@@ -1,6 +1,6 @@
 import { auth } from './auth-logic.js';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = '/api';
 const USER_ID_KEY = 'forgecart_user_id';
 const SELECTED_PRODUCT_KEY = 'forgecart_selected_product_id';
 
