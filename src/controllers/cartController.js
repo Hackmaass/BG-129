@@ -1,4 +1,4 @@
-const { db, admin } = require('../config/firebaseAdmin');
+const { db, collection, doc, getDoc, setDoc } = require('../config/firebaseAdmin');
 
 const DEFAULT_USER_ID = 'guest';
 
@@ -20,14 +20,14 @@ const buildCartResponse = (cartItems = []) => {
     };
 };
 
-const getCartRef = (userId) => db.collection('carts').doc(userId);
+const getCartRef = (userId) => doc(db, 'carts', String(userId));
 
 exports.getCart = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
-        const doc = await getCartRef(userId).get();
+        const docSnap = await getDoc(getCartRef(userId));
         
-        const items = doc.exists ? doc.data().items || [] : [];
+        const items = docSnap.exists() ? docSnap.data().items || [] : [];
 
         res.status(200).json({
             status: 'success',
@@ -54,10 +54,10 @@ exports.addToCart = async (req, res, next) => {
         }
 
         // Fetch product to verify and get price
-        const productRef = db.collection('products').doc(requestedProductId);
-        const productDoc = await productRef.get();
+        const productRef = doc(db, 'products', requestedProductId);
+        const productDoc = await getDoc(productRef);
 
-        if (!productDoc.exists) {
+        if (!productDoc.exists()) {
             return res.status(404).json({
                 status: 'error',
                 message: `Product with id ${requestedProductId} not found.`,
@@ -68,8 +68,8 @@ exports.addToCart = async (req, res, next) => {
 
         // Get current cart
         const cartRef = getCartRef(userId);
-        const cartDoc = await cartRef.get();
-        let items = cartDoc.exists ? cartDoc.data().items || [] : [];
+        const cartDoc = await getDoc(cartRef);
+        let items = cartDoc.exists() ? cartDoc.data().items || [] : [];
 
         const existingItemIndex = items.findIndex((item) => item.productId === requestedProductId);
         const existingQuantity = existingItemIndex !== -1 ? items[existingItemIndex].quantity : 0;
@@ -92,7 +92,7 @@ exports.addToCart = async (req, res, next) => {
             });
         }
 
-        await cartRef.set({ items }, { merge: true });
+        await setDoc(cartRef, { items }, { merge: true });
 
         return res.status(201).json({
             status: 'success',
@@ -110,9 +110,9 @@ exports.removeFromCart = async (req, res, next) => {
         const productId = String(req.params.productId);
         
         const cartRef = getCartRef(userId);
-        const cartDoc = await cartRef.get();
+        const cartDoc = await getDoc(cartRef);
         
-        if (!cartDoc.exists) {
+        if (!cartDoc.exists()) {
              return res.status(404).json({
                 status: 'error',
                 message: `Cart is empty.`,
@@ -130,7 +130,7 @@ exports.removeFromCart = async (req, res, next) => {
         }
 
         items.splice(itemIndex, 1);
-        await cartRef.set({ items }, { merge: true });
+        await setDoc(cartRef, { items }, { merge: true });
 
         return res.status(200).json({
             status: 'success',
@@ -156,9 +156,9 @@ exports.updateCartItem = async (req, res, next) => {
         }
 
         const cartRef = getCartRef(userId);
-        const cartDoc = await cartRef.get();
+        const cartDoc = await getDoc(cartRef);
         
-        if (!cartDoc.exists) {
+        if (!cartDoc.exists()) {
              return res.status(404).json({
                 status: 'error',
                 message: `Cart is empty.`,
@@ -175,10 +175,10 @@ exports.updateCartItem = async (req, res, next) => {
             });
         }
         
-        const productRef = db.collection('products').doc(productId);
-        const productDoc = await productRef.get();
+        const productRef = doc(db, 'products', productId);
+        const productDoc = await getDoc(productRef);
         
-        if (!productDoc.exists) {
+        if (!productDoc.exists()) {
              return res.status(404).json({
                 status: 'error',
                 message: `Product with id ${productId} not found.`,
@@ -195,7 +195,7 @@ exports.updateCartItem = async (req, res, next) => {
         }
 
         items[itemIndex].quantity = quantity;
-        await cartRef.set({ items }, { merge: true });
+        await setDoc(cartRef, { items }, { merge: true });
 
         return res.status(200).json({
             status: 'success',

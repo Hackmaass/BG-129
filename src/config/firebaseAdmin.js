@@ -1,23 +1,24 @@
 const admin = require('firebase-admin');
-const fs = require('fs');
-const path = require('path');
+const { initializeApp } = require('firebase/app');
+const { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, query, where } = require('firebase/firestore');
 
-const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
+// Initialize admin for Token Verification (Only requires projectId)
+admin.initializeApp({
+    projectId: "backforge-eec83"
+});
 
-// Check if the service account key exists (Required for Firestore access in Node.js)
-if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = require('./serviceAccountKey.json');
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("Firebase Admin Initialized successfully.");
-} else {
-    console.warn("⚠️  WARNING: serviceAccountKey.json not found in src/config/");
-    console.warn("⚠️  Firestore calls will fail. Please generate a new private key from Firebase Project Settings > Service Accounts and save it as src/config/serviceAccountKey.json");
-    // Fallback initialize without credentials (will fail on actual DB calls but allows app to start)
-    admin.initializeApp();
-}
+// Initialize client SDK for Firestore Database operations (Requires API Key)
+const firebaseConfig = {
+  apiKey: "AIzaSyCYfjCMcnIyKSLQPo_t3OCbPgh5q10wmUc",
+  authDomain: "backforge-eec83.firebaseapp.com",
+  projectId: "backforge-eec83",
+  storageBucket: "backforge-eec83.firebasestorage.app",
+  messagingSenderId: "580991512320",
+  appId: "1:580991512320:web:748f95ad3c53bd4f738de5"
+};
 
-const db = admin.firestore();
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-module.exports = { admin, db };
+module.exports = { admin, db, collection, doc, getDoc, getDocs, setDoc, updateDoc, writeBatch, query, where };
+

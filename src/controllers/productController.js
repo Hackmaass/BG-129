@@ -1,4 +1,4 @@
-const { db } = require('../config/firebaseAdmin');
+const { db, collection, doc, getDoc, getDocs } = require('../config/firebaseAdmin');
 
 const parseNumber = (value) => {
     if (value === undefined) {
@@ -22,10 +22,10 @@ exports.getAllProducts = async (req, res, next) => {
         } = req.query;
 
         // Fetch all products from Firestore
-        const productsSnapshot = await db.collection('products').get();
+        const productsSnapshot = await getDocs(collection(db, 'products'));
         let products = [];
-        productsSnapshot.forEach(doc => {
-            products.push({ id: doc.id, ...doc.data() });
+        productsSnapshot.forEach(docSnap => {
+            products.push({ id: docSnap.id, ...docSnap.data() });
         });
 
         const min = parseNumber(minPrice);
@@ -72,10 +72,10 @@ exports.getAllProducts = async (req, res, next) => {
 exports.getProductById = async (req, res, next) => {
     try {
         const id = String(req.params.id);
-        const docRef = db.collection('products').doc(id);
-        const doc = await docRef.get();
+        const docRef = doc(db, 'products', id);
+        const docSnap = await getDoc(docRef);
 
-        if (!doc.exists) {
+        if (!docSnap.exists()) {
             return res.status(404).json({
                 status: 'error',
                 message: `Product with id ${id} not found.`,
@@ -84,7 +84,7 @@ exports.getProductById = async (req, res, next) => {
 
         return res.status(200).json({
             status: 'success',
-            data: { id: doc.id, ...doc.data() },
+            data: { id: docSnap.id, ...docSnap.data() },
         });
     } catch (error) {
         next(error);
@@ -93,9 +93,9 @@ exports.getProductById = async (req, res, next) => {
 
 exports.getCategories = async (req, res, next) => {
     try {
-        const productsSnapshot = await db.collection('products').get();
+        const productsSnapshot = await getDocs(collection(db, 'products'));
         const products = [];
-        productsSnapshot.forEach(doc => products.push(doc.data()));
+        productsSnapshot.forEach(docSnap => products.push(docSnap.data()));
         
         const categories = [...new Set(products.map((product) => product.category))].filter(Boolean).sort();
 
@@ -111,13 +111,13 @@ exports.getCategories = async (req, res, next) => {
 
 exports.getInventory = async (req, res, next) => {
     try {
-        const productsSnapshot = await db.collection('products').get();
+        const productsSnapshot = await getDocs(collection(db, 'products'));
         const inventory = [];
         
-        productsSnapshot.forEach(doc => {
-            const product = doc.data();
+        productsSnapshot.forEach(docSnap => {
+            const product = docSnap.data();
             inventory.push({
-                id: doc.id,
+                id: docSnap.id,
                 name: product.name,
                 inventory: product.inventory,
                 inStock: product.inventory > 0,

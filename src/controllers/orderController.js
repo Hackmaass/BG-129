@@ -1,4 +1,4 @@
-const { db } = require('../config/firebaseAdmin');
+const { db, collection, doc, getDoc, getDocs, setDoc, writeBatch, query, where } = require('../config/firebaseAdmin');
 
 const DEFAULT_USER_ID = 'guest';
 const SHIPPING_FEE = 9.99;
@@ -38,9 +38,9 @@ exports.checkout = async (req, res, next) => {
         const userId = resolveUserId(req);
         const { shippingAddress, paymentMethod = 'card' } = req.body;
         
-        const cartRef = db.collection('carts').doc(userId);
-        const cartDoc = await cartRef.get();
-        const cartItems = cartDoc.exists ? cartDoc.data().items || [] : [];
+        const cartRef = doc(db, 'carts', String(userId));
+        const cartDoc = await getDoc(cartRef);
+        const cartItems = cartDoc.exists() ? cartDoc.data().items || [] : [];
 
         if (!shippingAddress) {
             return res.status(400).json({
@@ -58,9 +58,10 @@ exports.checkout = async (req, res, next) => {
 
         // Verify inventory
         for (const cartItem of cartItems) {
-            const productDoc = await db.collection('products').doc(cartItem.productId).get();
+            const productRef = doc(db, 'products', cartItem.productId);
+            const productDoc = await getDoc(productRef);
 
-            if (!productDoc.exists) {
+            if (!productDoc.exists()) {
                 return res.status(404).json({
                     status: 'error',
                     message: `Product ${cartItem.productId} no longer exists.`,
@@ -89,16 +90,15 @@ exports.checkout = async (req, res, next) => {
         }
 
         // Deduct inventory
-        const batch = db.batch();
+        const batch = writeBatch(db);
         for (const cartItem of cartItems) {
-            const productRef = db.collection('products').doc(cartItem.productId);
-            // Read again or just use field value decrement
-            const doc = await productRef.get();
-            const product = doc.data();
+            const productRef = doc(db, 'products', cartItem.productId);
+            const docSnap = await getDoc(productRef);
+            const product = docSnap.data();
             batch.update(productRef, { inventory: product.inventory - cartItem.quantity });
         }
 
-        const newOrderRef = db.collection('orders').doc();
+        const newOrderRef = doc(collection(db, 'orders'));
         const orderId = newOrderRef.id;
 
         const order = {
@@ -135,10 +135,11 @@ exports.checkout = async (req, res, next) => {
 exports.getOrderHistory = async (req, res, next) => {
     try {
         const userId = resolveUserId(req);
-        const snapshot = await db.collection('orders').where('userId', '==', userId).get();
+        const q = query(collection(db, 'orders'), where('userId', '==', userId));
+        const snapshot = await getDocs(q);
         
         let userOrders = [];
-        snapshot.forEach(doc => userOrders.push(doc.data()));
+        snapshot.forEach(docSnap => userOrders.push(docSnap.data()));
 
         userOrders = userOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
